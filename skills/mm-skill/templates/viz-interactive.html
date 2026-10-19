@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<!--
+  mm-skill · 交互式嵌入模板 / interactive embed template
+  ---------------------------------------------------------------
+  与 viz-basic.html 相同，另带右侧控制面板（通过 postMessage 实时更新参数）。
+  Same as viz-basic.html plus a control panel that updates params live via postMessage.
+  用法 Usage: 复制到 <项目>/.mm-viz/<名称>.html，编辑 MM_PARAMS 与控制项，然后
+             http://127.0.0.1:8019/viz/<名称>.html （需先运行 serve.py）
+  界面中英双语，右上角独立按钮切换，默认跟随浏览器语言并记忆选择。
+  Bilingual UI (zh/en) with a language button; follows the browser language
+  by default and remembers the choice.
+  参考 reference: ../reference/params-reference.md
+-->
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mm 交互可视化 / mm interactive visualization</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #app { display: flex; flex-direction: column; height: 100%; }
+    #bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px;
+      background: #17181c; border-bottom: 1px solid #2a2c33; flex: none; font-size: 13px; }
+    #title { font-weight: 600; margin-right: auto; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    #bar button { background: #2a2c33; color: #ddd; border: 1px solid #3a3d46; border-radius: 6px;
+      padding: 5px 10px; font-size: 12px; cursor: pointer; }
+    #bar button:hover { background: #34373f; }
+    #bar .hint { color: #777; font-size: 12px; }
+    #lang-toggle { min-width: 52px; }
+    #main { flex: 1; display: flex; min-height: 0; }
+    #iframe { flex: 1; border: none; min-width: 0; }
+    #panel { width: 246px; flex: none; background: #17181c; border-left: 1px solid #2a2c33;
+      overflow-y: auto; padding: 12px 14px 20px; font-size: 12px; }
+    #panel.collapsed { display: none; }
+    #panel h3 { margin: 14px 0 6px; font-size: 12px; color: #9aa0ac; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .04em; }
+    #panel h3:first-child { margin-top: 0; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+    .row label { color: #b8bdc7; flex: 1; }
+    .row select, .row input[type=number] { width: 118px; background: #101114; color: #ddd;
+      border: 1px solid #3a3d46; border-radius: 5px; padding: 4px 6px; font-size: 12px; }
+    .row input[type=range] { width: 118px; }
+    .blocks3 { display: flex; gap: 6px; }
+    .blocks3 input { width: 100%; }
+    .blocks3 span { color: #888; align-self: center; }
+    #offline-warn { display: none; padding: 10px 14px; background: #4a2b12; color: #ffd9a0;
+      font-size: 13px; flex: none; }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="bar">
+      <span id="title" data-i18n="barTitle"></span>
+      <span class="hint" id="src-hint"></span>
+      <button id="src-toggle"></button>
+      <button id="reload" data-i18n="reload" data-i18n-title="reloadTitle"></button>
+      <button id="popout" data-i18n="popout" data-i18n-title="popoutTitle"></button>
+      <button id="share" data-i18n="share" data-i18n-title="shareTitle"></button>
+      <button id="panel-toggle" data-i18n="panelToggle" data-i18n-title="panelToggleTitle"></button>
+      <button id="lang-toggle" data-i18n-title="langTitle"></button>
+    </div>
+    <div id="offline-warn" data-i18n="offlineWarn"></div>
+    <div id="main">
+      <iframe id="iframe" allowfullscreen></iframe>
+      <aside id="panel">
+        <h3 data-i18n="panelAnim">动画</h3>
+        <div class="row"><label data-i18n="labelAlg">算法</label>
+          <select id="c-alg">
+            <option value="none" data-i18n="optAlgNone">none 停止</option>
+            <option value="dotprod (row major)" data-i18n="optAlgDotRow">dotprod 行主序</option>
+            <option value="dotprod (col major)" data-i18n="optAlgDotCol">dotprod 列主序</option>
+            <option value="axpy">axpy</option>
+            <option value="vmprod" data-i18n="optAlgVmprod">vmprod 向量×矩阵</option>
+            <option value="mvprod" data-i18n="optAlgMvprod">mvprod 矩阵×向量</option>
+            <option value="vvprod" data-i18n="optAlgVvprod">vvprod 外积累加</option>
+          </select></div>
+        <div class="row"><label data-i18n="labelSpeed">速度</label><input type="range" id="c-speed" min="1" max="100" step="1"></div>
+        <div class="row"><label data-i18n="labelFuse">融合</label>
+          <select id="c-fuse"><option>none</option><option>sync</option><option>async</option></select></div>
+        <div class="row"><label data-i18n="labelSpin">旋转</label>
+          <select id="c-spin">
+            <option value="0" data-i18n="optSpinStop">停止</option>
+            <option value="1" data-i18n="optSpinCcw">逆时针 +1</option>
+            <option value="-1" data-i18n="optSpinCw">顺时针 -1</option>
+          </select></div>
+
+        <h3 data-i18n="panelViz">显示</h3>
+        <div class="row"><label data-i18n="labelSens">敏感度</label>
+          <select id="c-sens">
+            <option value="global">global</option><option value="local">local</option>
+            <option value="semilocal">semilocal</option><option value="superlocal">superlocal</option>
+          </select></div>
+        <div class="row"><label data-i18n="labelEpilog">epilog</label>
+          <select id="c-epilog">
+            <option>none</option><option>relu</option><option>gelu</option><option>sigmoid</option>
+            <option>silu</option><option>tanh</option><option>layernorm</option><option>softmax</option>
+            <option>softmax(x/sqrt(k))</option><option>softmax(tril(x/sqrt(k)))</option>
+          </select></div>
+
+        <h3 data-i18n="panelBlock">分块</h3>
+        <div class="row"><label>i / k / j blocks</label>
+          <div class="blocks3">
+            <input type="number" id="c-bki" min="1" max="32" title="i blocks">
+            <input type="number" id="c-bkk" min="1" max="32" title="k blocks">
+            <input type="number" id="c-bkj" min="1" max="32" title="j blocks">
+          </div></div>
+
+        <h3 data-i18n="panelLayout">布局</h3>
+        <div class="row"><label data-i18n="labelScheme">方案</label>
+          <select id="c-scheme">
+            <option value="blocks">blocks</option><option value="zigzag">zigzag</option>
+            <option value="wheel">wheel</option><option value="custom">custom</option>
+          </select></div>
+
+        <h3 data-i18n="panelActions">操作</h3>
+        <div class="row"><button id="reset" style="flex:1" data-i18n="reset">↺ 复位到初始参数</button></div>
+        <p style="color:#777; line-height:1.5" data-i18n="pauseHint"></p>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // MM_PARAMS：初始可视化参数 —— 编辑这里 / initial params - edit this object
+    // 通过 postMessage setParams 深度合并应用（支持部分参数）：
+    //   - 改表达式：给 expr + sync_expr:true
+    //   - 改矩阵形状：按树路径定位叶子（见下方 Q/K 示例）
+    // Applied via postMessage setParams (deep merge, partials OK).
+    // 控制面板的改动实时叠加在 mm 内存中的 params 上；刷新/复位回到这里定义的值。
+    // ============================================================
+    const MM_PARAMS = {
+      // 两层注意力示例 / two-level attention example
+      expr: 'out = (attn = Q @ K) @ V',
+      sync_expr: true,
+      epilog: 'none',
+      anim: { alg: 'vmprod', fuse: 'sync', speed: 16 },
+      // 叶子形状：attn.left = Q (32x16)，attn.right = K (16x32)；V 用默认 32x32
+      // leaf shapes: Q is left.left, K is left.right; V keeps the 32x32 default
+      left: {
+        left: { h: 32, w: 16 },
+        right: { h: 16, w: 32 },
+      },
+    }
+
+    // ============================================================
+    // 界面文案（中/英）/ UI messages (zh/en)
+    // ============================================================
+    const I18N = {
+      zh: {
+        pageTitle: 'mm · 交互式矩阵乘法可视化',
+        barTitle: 'mm · 交互式矩阵乘法可视化',
+        srcHintOnline: '源: 线上 / online',
+        srcHintLocal: '源: 离线副本 / offline',
+        useOffline: '⇄ 用离线',
+        useOnline: '⇄ 用线上',
+        reload: '⟳ 刷新',
+        reloadTitle: '重新加载 iframe',
+        popout: '↗ 新窗口',
+        popoutTitle: '在新窗口打开当前可视化',
+        share: '⎘ 复制分享链接',
+        shareTitle: '复制 mm 当前会话的分享链接',
+        shareCopied: '✓ 已复制',
+        copyPrompt: '复制链接',
+        panelToggle: '▤ 控制面板',
+        panelToggleTitle: '显示/隐藏控制面板',
+        langTitle: 'Switch to English / 切换到英文',
+        offlineWarn: '离线副本不可用：本地服务器未运行。使用 skill 时服务器会自动启动；手动使用时请先运行 serve.py。',
+        panelAnim: '动画',
+        labelAlg: '算法',
+        labelSpeed: '速度',
+        labelFuse: '融合',
+        labelSpin: '旋转',
+        optAlgNone: 'none 停止',
+        optAlgDotRow: 'dotprod 行主序',
+        optAlgDotCol: 'dotprod 列主序',
+        optAlgVmprod: 'vmprod 向量×矩阵',
+        optAlgMvprod: 'mvprod 矩阵×向量',
+        optAlgVvprod: 'vvprod 外积累加',
+        optSpinStop: '停止',
+        optSpinCcw: '逆时针 +1',
+        optSpinCw: '顺时针 -1',
+        panelViz: '显示',
+        labelSens: '敏感度',
+        labelEpilog: 'epilog',
+        panelBlock: '分块',
+        panelLayout: '布局',
+        labelScheme: '方案',
+        panelActions: '操作',
+        reset: '↺ 复位到初始参数',
+        pauseHint: '暂停/单步：在 mm 窗口中按空格暂停；暂停后用 mm 菜单的 step 单步（postMessage 无法控制暂停）。',
+      },
+      en: {
+        pageTitle: 'mm · interactive matmul visualization',
+        barTitle: 'mm · interactive matmul visualization',
+        srcHintOnline: 'source: online',
+        srcHintLocal: 'source: offline copy',
+        useOffline: '⇄ Offline',
+        useOnline: '⇄ Online',
+        reload: '⟳ Reload',
+        reloadTitle: 'Reload the iframe',
+        popout: '↗ New window',
+        popoutTitle: 'Open the current visualization in a new window',
+        share: '⎘ Copy link',
+        shareTitle: 'Copy a shareable link to the current mm session',
+        shareCopied: '✓ Copied',
+        copyPrompt: 'Copy link',
+        panelToggle: '▤ Controls',
+        panelToggleTitle: 'Show/hide the control panel',
+        langTitle: '切换为中文 / switch to Chinese',
+        offlineWarn: 'Offline copy not available: the local server is not running. The skill starts it automatically; run serve.py first when working manually.',
+        panelAnim: 'Animation',
+        labelAlg: 'Algorithm',
+        labelSpeed: 'Speed',
+        labelFuse: 'Fuse',
+        labelSpin: 'Spin',
+        optAlgNone: 'none',
+        optAlgDotRow: 'dotprod (row major)',
+        optAlgDotCol: 'dotprod (col major)',
+        optAlgVmprod: 'vmprod (vector-matrix)',
+        optAlgMvprod: 'mvprod (matrix-vector)',
+        optAlgVvprod: 'vvprod (outer products)',
+        optSpinStop: 'Stop',
+        optSpinCcw: 'CCW +1',
+        optSpinCw: 'CW -1',
+        panelViz: 'Display',
+        labelSens: 'Sensitivity',
+        labelEpilog: 'epilog',
+        panelBlock: 'Blocking',
+        panelLayout: 'Layout',
+        labelScheme: 'Scheme',
+        panelActions: 'Actions',
+        reset: '↺ Reset to initial params',
+        pauseHint: 'Pause/step: press space inside the mm window; when paused use the mm menu step (postMessage cannot control pause).',
+      },
+    }
+
+    let lang = (() => {
+      try {
+        const saved = localStorage.getItem('mm-skill-lang')
+        if (saved === 'zh' || saved === 'en') return saved
+      } catch (e) { /* file:// may block storage */ }
+      return (navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+    })()
+    const t = key => (I18N[lang] && I18N[lang][key]) || key
+
+    // 应用当前语言到全部带 data-i18n / data-i18n-title 的元素
+    // Apply the current language to every data-i18n / data-i18n-title element
+    function applyLang() {
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+      document.title = t('pageTitle')
+      document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n) })
+      document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle) })
+      const btn = document.getElementById('lang-toggle')
+      btn.textContent = lang === 'zh' ? 'EN' : '中文'
+      updateBar() // 动态文案（源提示/切换按钮）随语言刷新
+    }
+
+    // ============================================================
+    // 通用逻辑 / generic logic
+    // ============================================================
+    const MM_ONLINE = 'https://bhosmer.github.io/mm/index.html'
+    const MM_LOCAL = '/mm/index.html'
+    const iframe = document.getElementById('iframe')
+
+    const query = new URLSearchParams(location.search)
+    const srcMode = query.get('src') === 'local' ? 'local' : 'online'
+    const mmBase = srcMode === 'local' ? MM_LOCAL : MM_ONLINE
+
+    // 顶栏动态文案（依赖当前源模式 + 语言）/ dynamic bar text
+    function updateBar() {
+      document.getElementById('src-hint').textContent =
+        srcMode === 'local' ? t('srcHintLocal') : t('srcHintOnline')
+      document.getElementById('src-toggle').textContent =
+        srcMode === 'local' ? t('useOnline') : t('useOffline')
+    }
+
+    function load() {
+      updateBar()
+      iframe.src = mmBase // 先以 mm 默认加载，再由 load 事件应用 MM_PARAMS
+      document.getElementById('offline-warn').style.display =
+        (srcMode === 'local' && location.protocol === 'file:') ? 'block' : 'none'
+    }
+
+    // 应用参数：必须用 postMessage setParams（深度合并）；不要用 URL ?params=
+    // （URL 形式是顶层整体替换，部分参数会破坏默认结构）
+    function applyParams() {
+      iframe.contentWindow.postMessage(
+        { setParams: { props: JSON.parse(JSON.stringify(MM_PARAMS)), reset: false } }, '*')
+      setTimeout(syncControls, 300) // 应用后同步控件显示 / sync controls after apply
+    }
+    iframe.addEventListener('load', applyParams)
+
+    document.getElementById('src-toggle').onclick = () => {
+      const q = new URLSearchParams(location.search)
+      q.set('src', srcMode === 'local' ? 'online' : 'local')
+      location.search = q.toString()
+    }
+    document.getElementById('reload').onclick = load
+    document.getElementById('panel-toggle').onclick = () =>
+      document.getElementById('panel').classList.toggle('collapsed')
+
+    // 语言切换按钮 / language toggle
+    document.getElementById('lang-toggle').onclick = () => {
+      lang = lang === 'zh' ? 'en' : 'zh'
+      try { localStorage.setItem('mm-skill-lang', lang) } catch (e) { /* ignore */ }
+      applyLang()
+    }
+
+    // ---- 与 mm 通信 / messaging with mm ----
+    const RESPONDERS = {}
+    let lastSearchParams = ''
+
+    window.addEventListener('message', event => {
+      if (event.source !== iframe.contentWindow) return
+      const data = event.data || {}
+      if (typeof data.search_params === 'string') lastSearchParams = data.search_params
+      Object.entries(data).forEach(([k, v]) => {
+        const r = RESPONDERS[k]
+        r && r(v)
+      })
+    })
+
+    function withResponse(msg, resp, f, timeoutMs = 1500) {
+      const cleanup = () => { delete RESPONDERS[resp] }
+      const timeout = setTimeout(cleanup, timeoutMs)
+      RESPONDERS[resp] = x => { f(x); clearTimeout(timeout); cleanup() }
+      iframe.contentWindow.postMessage(msg, '*')
+    }
+
+    // 实时更新参数 / update params live
+    function mmSet(props, reset = false) {
+      iframe.contentWindow.postMessage({ setParams: { props, reset } }, '*')
+    }
+
+    // ---- 顶部按钮 / top bar buttons ----
+    document.getElementById('popout').onclick = () =>
+      withResponse({ getUrlInfo: undefined }, 'url_info', info => window.open(info.url, '_blank'))
+
+    document.getElementById('share').onclick = () => {
+      const fallback = lastSearchParams ? mmBase + '?' + lastSearchParams : mmBase
+      let done = false
+      withResponse({ getUrlInfo: undefined }, 'url_info', info => {
+        done = true
+        copyText(info.url)
+      })
+      setTimeout(() => { if (!done) copyText(fallback) }, 1600) // mm 无响应时用当前 URL 兜底
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(
+          () => flash('share', t('shareCopied')),
+          () => prompt(t('copyPrompt'), text))
+      } else {
+        prompt(t('copyPrompt'), text)
+      }
+    }
+
+    function flash(id, text) {
+      const b = document.getElementById(id)
+      const old = b.textContent
+      b.textContent = text
+      setTimeout(() => { applyLang() }, 1200) // 恢复按钮语言文案 / restore localized label
+    }
+
+    // ---- 控制面板 / control panel ----
+    // 每个控制项：读当前值填充控件，变更时按路径合并成部分 props 后 postMessage
+    // Each control: fill from mm's current params; on change send a partial props patch.
+    function getPath(obj, path) {
+      return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
+    }
+
+    const CONTROLS = [
+      // id, params 路径, 取值方式
+      { id: 'c-alg', path: 'anim.alg', kind: 'value' },
+      { id: 'c-speed', path: 'anim.speed', kind: 'number' },
+      { id: 'c-fuse', path: 'anim.fuse', kind: 'value' },
+      { id: 'c-spin', path: 'anim.spin', kind: 'number' },
+      { id: 'c-sens', path: 'viz.sensitivity', kind: 'value' },
+      { id: 'c-epilog', path: 'epilog', kind: 'value' },
+      { id: 'c-bki', path: 'block.i blocks', kind: 'number' },
+      { id: 'c-bkk', path: 'block.k blocks', kind: 'number' },
+      { id: 'c-bkj', path: 'block.j blocks', kind: 'number' },
+      { id: 'c-scheme', path: 'layout.scheme', kind: 'value' },
+    ]
+
+    function patchFromPath(path, value) {
+      const props = {}
+      let node = props
+      const keys = path.split('.')
+      keys.forEach((k, i) => {
+        if (i === keys.length - 1) node[k] = value
+        else node = node[k] = {}
+      })
+      return props
+    }
+
+    CONTROLS.forEach(c => {
+      const el = document.getElementById(c.id)
+      const event = el.type === 'range' ? 'input' : 'change' // 滑块实时，其余变更时
+      el.addEventListener(event, () => {
+        const v = c.kind === 'number' ? Number(el.value) : el.value
+        if (c.kind === 'number' && (!el.value || isNaN(v))) return
+        mmSet(patchFromPath(c.path, v))
+      })
+    })
+
+    // 从 mm 同步控件显示值 / sync control values from mm's live params
+    function syncControls() {
+      withResponse({ getParams: undefined }, 'params', params => {
+        CONTROLS.forEach(c => {
+          const el = document.getElementById(c.id)
+          let v = getPath(params, c.path)
+          if (v === undefined) return
+          if (c.id === 'c-spin') {
+            v = String(Number(v) > 0 ? 1 : Number(v) < 0 ? -1 : 0)
+          }
+          if (el.tagName === 'SELECT') el.value = v
+          else el.value = v
+        })
+      })
+    }
+
+    // 复位 / reset to initial MM_PARAMS
+    document.getElementById('reset').onclick = () => {
+      mmSet(MM_PARAMS, true) // reset:true 先清空再应用 / reset then apply
+      setTimeout(syncControls, 400)
+    }
+
+    applyLang() // 初始化界面语言 / init UI language
+    load()
+  </script>
+</body>
+
+</html>

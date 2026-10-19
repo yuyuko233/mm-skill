@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<!--
+  mm-skill · 基础嵌入模板 / basic embed template
+  ---------------------------------------------------------------
+  用法 Usage:
+  1. 复制到 <项目>/.mm-viz/<名称>.html 并编辑 MM_PARAMS (中文注释处)
+     Copy to <project>/.mm-viz/<name>.html and edit MM_PARAMS
+  2. 启动本地服务器: python <skill>/scripts/serve.py
+     Start local server, then open: http://127.0.0.1:8019/viz/<名称>.html
+  3. 默认使用线上 mm (bhosmer.github.io)；加 ?src=local 或点右上角切换为离线副本
+     Defaults to the online mm build; append ?src=local or use the toggle for
+     the offline copy served at /mm/index.html (needs serve.py running).
+  4. 界面中英双语，右上角独立按钮切换，默认跟随浏览器语言并记忆选择
+     Bilingual UI (zh/en) with a language button; follows the browser language
+     by default and remembers the choice.
+
+  参考 reference: ../reference/params-reference.md
+-->
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mm 可视化 / mm visualization</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #app { display: flex; flex-direction: column; height: 100%; }
+    #bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px;
+      background: #17181c; border-bottom: 1px solid #2a2c33; flex: none; font-size: 13px; }
+    #title { font-weight: 600; margin-right: auto; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    #bar button, #bar a.btn { background: #2a2c33; color: #ddd; border: 1px solid #3a3d46;
+      border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; text-decoration: none; }
+    #bar button:hover, #bar a.btn:hover { background: #34373f; }
+    #bar .hint { color: #777; font-size: 12px; }
+    #lang-toggle { min-width: 52px; }
+    #iframe { flex: 1; width: 100%; border: none; }
+    #offline-warn { display: none; padding: 10px 14px; background: #4a2b12; color: #ffd9a0;
+      font-size: 13px; flex: none; }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="bar">
+      <span id="title" data-i18n="barTitle"></span>
+      <span class="hint" id="src-hint"></span>
+      <button id="src-toggle"></button>
+      <button id="reload" data-i18n="reload" data-i18n-title="reloadTitle"></button>
+      <button id="popout" data-i18n="popout" data-i18n-title="popoutTitle"></button>
+      <button id="lang-toggle" data-i18n-title="langTitle"></button>
+    </div>
+    <div id="offline-warn" data-i18n="offlineWarn"></div>
+    <iframe id="iframe" allowfullscreen></iframe>
+  </div>
+
+  <script>
+    // ============================================================
+    // MM_PARAMS：可视化参数 —— 编辑这里 / edit this object
+    // 通过 postMessage setParams 深度合并应用到 mm（支持部分参数）：
+    //   - 改表达式：给 expr + sync_expr:true
+    //   - 改矩阵形状：按树路径定位叶子，如 left.left = (Q 叶子)
+    // Applied via postMessage setParams (deep merge, partials OK).
+    // 完整参数说明见 reference/params-reference.md
+    // ============================================================
+    const MM_PARAMS = {
+      // 两层注意力示例 / two-level attention example
+      // out = (attn = Q @ K) @ V ；Q/K/V 用内置初值生成，离线可用
+      expr: 'out = (attn = Q @ K) @ V',
+      sync_expr: true,
+      epilog: 'none',
+      anim: { alg: 'vmprod', fuse: 'sync', speed: 16 },
+      // 叶子形状：attn.left = Q (32x16)，attn.right = K (16x32)；V 用默认 32x32
+      // leaf shapes: Q is left.left, K is left.right; V keeps the 32x32 default
+      left: {
+        left: { h: 32, w: 16 },
+        right: { h: 16, w: 32 },
+      },
+    }
+
+    // ============================================================
+    // 界面文案（中/英）/ UI messages (zh/en)
+    // ============================================================
+    const I18N = {
+      zh: {
+        pageTitle: 'mm · 矩阵乘法 3D 可视化',
+        barTitle: 'mm · 矩阵乘法 3D 可视化',
+        srcHintOnline: '源: 线上 / online',
+        srcHintLocal: '源: 离线副本 / offline',
+        useOffline: '⇄ 用离线',
+        useOnline: '⇄ 用线上',
+        reload: '⟳ 刷新',
+        reloadTitle: '重新加载 iframe',
+        popout: '↗ 新窗口',
+        popoutTitle: '在新窗口打开当前可视化',
+        langTitle: 'Switch to English / 切换到英文',
+        offlineWarn: '离线副本不可用：本地服务器未运行。使用 skill 时服务器会自动启动；手动使用时请先运行 serve.py。',
+      },
+      en: {
+        pageTitle: 'mm · matmul 3D visualization',
+        barTitle: 'mm · matmul 3D visualization',
+        srcHintOnline: 'source: online',
+        srcHintLocal: 'source: offline copy',
+        useOffline: '⇄ Offline',
+        useOnline: '⇄ Online',
+        reload: '⟳ Reload',
+        reloadTitle: 'Reload the iframe',
+        popout: '↗ New window',
+        popoutTitle: 'Open the current visualization in a new window',
+        langTitle: '切换为中文 / switch to Chinese',
+        offlineWarn: 'Offline copy not available: the local server is not running. The skill starts it automatically; run serve.py first when working manually.',
+      },
+    }
+
+    let lang = (() => {
+      try {
+        const saved = localStorage.getItem('mm-skill-lang')
+        if (saved === 'zh' || saved === 'en') return saved
+      } catch (e) { /* file:// may block storage */ }
+      return (navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+    })()
+    const t = key => (I18N[lang] && I18N[lang][key]) || key
+
+    // 应用当前语言到全部带 data-i18n / data-i18n-title 的元素
+    // Apply the current language to every data-i18n / data-i18n-title element
+    function applyLang() {
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+      document.title = t('pageTitle')
+      document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n) })
+      document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle) })
+      const btn = document.getElementById('lang-toggle')
+      btn.textContent = lang === 'zh' ? 'EN' : '中文'
+      updateBar() // 动态文案（源提示/切换按钮）随语言刷新
+    }
+
+    // ============================================================
+    // 以下为通用逻辑，一般无需修改 / generic logic below - usually no edits needed
+    // ============================================================
+    const MM_ONLINE = 'https://bhosmer.github.io/mm/index.html'
+    const MM_LOCAL = '/mm/index.html'
+    const iframe = document.getElementById('iframe')
+
+    const query = new URLSearchParams(location.search)
+    const srcMode = query.get('src') === 'local' ? 'local' : 'online'
+    const mmBase = srcMode === 'local' ? MM_LOCAL : MM_ONLINE
+
+    // 顶栏动态文案（依赖当前源模式 + 语言）/ dynamic bar text
+    function updateBar() {
+      document.getElementById('src-hint').textContent =
+        srcMode === 'local' ? t('srcHintLocal') : t('srcHintOnline')
+      document.getElementById('src-toggle').textContent =
+        srcMode === 'local' ? t('useOnline') : t('useOffline')
+    }
+
+    // ---- iframe 加载 / load ----
+    function load() {
+      updateBar()
+      iframe.src = mmBase // 先以 mm 默认加载，再由 load 事件应用 MM_PARAMS
+      // 通过 file:// 打开且选择离线时报错提示 / warn if local mode without server
+      document.getElementById('offline-warn').style.display =
+        (srcMode === 'local' && location.protocol === 'file:') ? 'block' : 'none'
+    }
+
+    document.getElementById('src-toggle').onclick = () => {
+      const q = new URLSearchParams(location.search)
+      q.set('src', srcMode === 'local' ? 'online' : 'local')
+      location.search = q.toString()
+    }
+    document.getElementById('reload').onclick = load
+
+    document.getElementById('lang-toggle').onclick = () => {
+      lang = lang === 'zh' ? 'en' : 'zh'
+      try { localStorage.setItem('mm-skill-lang', lang) } catch (e) { /* ignore */ }
+      applyLang()
+    }
+
+    // ============================================================
+    // 应用参数 / apply params
+    // 注意：必须用 postMessage setParams（深度合并），不要用 URL ?params=
+    // （URL 形式是顶层整体替换，部分参数会破坏默认结构）。
+    // Always use postMessage setParams (deep merge); URL ?params= replaces
+    // top-level keys wholesale and breaks the tree with partial objects.
+    // ============================================================
+    function applyParams() {
+      iframe.contentWindow.postMessage(
+        { setParams: { props: JSON.parse(JSON.stringify(MM_PARAMS)), reset: false } }, '*')
+    }
+    iframe.addEventListener('load', applyParams)
+
+    // ---- 与 mm 通信 / talk to mm ----
+    // 请求-响应模式（超时 1s）/ request-response with 1s timeout
+    const RESPONDERS = {}
+    window.addEventListener('message', event => {
+      const data = event.data || {}
+      Object.entries(data).forEach(([k, v]) => {
+        const r = RESPONDERS[k]
+        r && r(v)
+      })
+    })
+    function withResponse(msg, resp, f) {
+      const cleanup = () => { delete RESPONDERS[resp] }
+      const timeout = setTimeout(cleanup, 1000)
+      RESPONDERS[resp] = x => { f(x); clearTimeout(timeout); cleanup() }
+      iframe.contentWindow.postMessage(msg, '*')
+    }
+
+    // 在新窗口打开当前可视化 / pop out current viz (uses mm's getUrlInfo API)
+    document.getElementById('popout').onclick = () => {
+      withResponse({ getUrlInfo: undefined }, 'url_info', info => window.open(info.url, '_blank'))
+    }
+
+    // ============================================================
+    // 可选：运行时继续更新参数
+    // Optional: further runtime updates via postMessage
+    //   更新: mmSet(props)  复位到初始: mmSet(MM_PARAMS, true)
+    // ============================================================
+    window.mmSet = (props, reset = false) =>
+      iframe.contentWindow.postMessage({ setParams: { props, reset } }, '*')
+
+    applyLang() // 初始化界面语言 / init UI language
+    load()
+  </script>
+</body>
+
+</html>

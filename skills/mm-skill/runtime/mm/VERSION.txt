@@ -1,0 +1,4 @@
+source: https://github.com/bhosmer/mm
+ref: master
+fetched (UTC): 2026-10-15 07:12:09
+license: MIT (see LICENSE) - Copyright (c) Meta Platforms, Inc. and affiliates.
