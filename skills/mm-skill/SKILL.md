@@ -44,8 +44,8 @@ Work in the user's project directory (server auto-creates `./.mm-viz` for pages)
    cat /tmp/mm-skill-serve.log 2>/dev/null || true   # actual port when newly started (default 8019, auto-increments if busy)
    ```
    The server always serves the viz pages and the offline runtime - online and offline modes both need it running. Viz dir can be overridden: `--viz-dir <path>`.
-3. **Hand the URL to the user**: `http://127.0.0.1:8019/viz/<name>.html` (also listable at `http://127.0.0.1:8019/`). If the host agent has a preview/link UI, surface it there.
-4. **Verify** (recommended): check `http://127.0.0.1:8019/health` returns `ok`; if a browser tool (Playwright MCP etc.) is available, screenshot the page and confirm the cube renders (a black scene = failure; check console).
+3. **Hand the URL to the user**: `http://127.0.0.1:<port>/viz/<name>.html` (use the actual port from the server log - default 8019, auto-incremented if busy; the index is listable at `http://127.0.0.1:<port>/`). If the host agent has a preview/link UI, surface it there.
+4. **Verify** (recommended): check `http://127.0.0.1:<port>/health` returns `ok`; if a browser tool (Playwright MCP etc.) is available, screenshot the page and confirm the cube renders (a black scene = failure; check console).
 5. **Iterate**: edit `MM_PARAMS` + user refreshes, or push live updates (below).
 
 **Online vs offline mm**: templates default to the online build (`https://bhosmer.github.io/mm/index.html`). If the network can't reach GitHub Pages, add `?src=local` to the page URL (or click the toggle) to use the offline copy served at `/mm/index.html`. Offline mode requires `serve.py` running.

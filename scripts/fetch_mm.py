@@ -74,7 +74,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch mm runtime files for offline use")
     parser.add_argument("--dest", default=None, help="destination directory (default: <repo>/skills/mm-skill/runtime/mm)")
     parser.add_argument("--ref", default="master", help="git ref to fetch (default: master)")
-    parser.add_argument("--proxy", default=DEFAULT_PROXY, help="HTTP proxy, e.g. http://host:port (default: none)")
+    parser.add_argument("--proxy", default=DEFAULT_PROXY, help="HTTP proxy, e.g. http://host:port (default: none, or $MM_PROXY)")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent

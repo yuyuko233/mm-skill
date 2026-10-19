@@ -56,6 +56,12 @@ def make_handler(viz_dir: Path):
             clean = urllib.parse.unquote(self.path.split("?")[0].split("#")[0])
             if clean == "/health":
                 return self._send_text(200, "ok")
+            if clean == "/favicon.ico":
+                # 浏览器默认请求网站图标，直接返回 204 避免 404 噪声
+                self.send_response(204)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             if clean in ("/", "/index.html"):
                 return self._send_listing()
             if clean == "/viz" or clean == PREFIX_VIZ.rstrip("/"):
@@ -190,7 +196,7 @@ def main():
 
     if not (MM_ROOT / "index.html").is_file():
         print(f"ERROR: mm runtime not found at {MM_ROOT}")
-        print("Run fetch_mm.py first:  python fetch_mm.py")
+        print(f"Run the repo-level fetch script first:  python {SKILL_DIR.parent.parent / 'scripts' / 'fetch_mm.py'}")
         return 1
 
     viz_dir = Path(args.viz_dir).resolve() if args.viz_dir else (Path.cwd() / ".mm-viz")

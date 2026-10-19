@@ -193,6 +193,7 @@
     // 请求-响应模式（超时 1s）/ request-response with 1s timeout
     const RESPONDERS = {}
     window.addEventListener('message', event => {
+      if (event.source !== iframe.contentWindow) return
       const data = event.data || {}
       Object.entries(data).forEach(([k, v]) => {
         const r = RESPONDERS[k]

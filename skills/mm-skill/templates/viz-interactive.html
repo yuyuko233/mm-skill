@@ -362,10 +362,8 @@
     }
 
     function flash(id, text) {
-      const b = document.getElementById(id)
-      const old = b.textContent
-      b.textContent = text
-      setTimeout(() => { applyLang() }, 1200) // 恢复按钮语言文案 / restore localized label
+      document.getElementById(id).textContent = text
+      setTimeout(applyLang, 1200) // 恢复按钮语言文案 / restore localized label
     }
 
     // ---- 控制面板 / control panel ----
@@ -420,8 +418,7 @@
           if (c.id === 'c-spin') {
             v = String(Number(v) > 0 ? 1 : Number(v) < 0 ? -1 : 0)
           }
-          if (el.tagName === 'SELECT') el.value = v
-          else el.value = v
+          el.value = v
         })
       })
     }

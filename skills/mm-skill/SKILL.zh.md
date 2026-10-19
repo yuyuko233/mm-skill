@@ -42,8 +42,8 @@ mm 是一个静态 Three.js Web 应用：完全由 **params JSON** 驱动，通�
    cat /tmp/mm-skill-serve.log 2>/dev/null || true   # 新启动时显示实际端口（默认 8019，被占用时自动递增）
    ```
    服务器同时**提供可视化页面与离线运行时**——线上/离线两种模式都需要它运行。可视化目录可覆盖：`--viz-dir <path>`。
-3. **把 URL 交给用户**：`http://127.0.0.1:8019/viz/<name>.html`（汇总页 `http://127.0.0.1:8019/`）。若宿主智能体提供预览/链接界面，可通过它展示。
-4. **验证**（推荐）：检查 `http://127.0.0.1:8019/health` 返回 `ok`；若有浏览器工具（Playwright MCP 等），截图确认立方体渲染正常（黑屏 = 失败；检查 console）。
+3. **把 URL 交给用户**：`http://127.0.0.1:<port>/viz/<name>.html`（使用服务器日志中的实际端口——默认 8019，被占用时自动递增；汇总页 `http://127.0.0.1:<port>/`）。若宿主智能体提供预览/链接界面，可通过它展示。
+4. **验证**（推荐）：检查 `http://127.0.0.1:<port>/health` 返回 `ok`；若有浏览器工具（Playwright MCP 等），截图确认立方体渲染正常（黑屏 = 失败；检查 console）。
 5. **迭代**：编辑 `MM_PARAMS` 让用户刷新，或推送实时更新（见下）。
 
 **线上 vs 离线 mm**：模板默认使用线上构建（`https://bhosmer.github.io/mm/index.html`）。如果网络无法访问 GitHub Pages，在页面 URL 上加 `?src=local`（或点击切换按钮）使用 `/mm/index.html` 提供的离线副本。离线模式需要 `serve.py` 运行。
