@@ -18,6 +18,7 @@ mm is a static Three.js web app: you drive it entirely with a **params JSON** ap
 | `templates/viz-basic.html` | Copy this to create a simple embed page (bilingual UI: zh/en toggle) |
 | `templates/viz-interactive.html` | Copy this for a page with a live control panel (bilingual UI) |
 | `scripts/serve.py` | Local server: `/mm/*` = offline mm runtime, `/viz/*` = viz pages |
+| `scripts/mcp.py` | MCP server (stdio JSON-RPC): embeds the same HTTP service and exposes create/update/list/delete/open viz tools |
 | `runtime/mm/` | Vendored offline copy of mm incl. its official manual `ref.html` (the in-app "Reference" link works against it; MIT license) |
 | `reference/params-reference.md` | Full params manual (English) - read before hand-authoring complex params |
 | `reference/params-reference.zh.md` | Chinese translation of the params manual |
@@ -49,6 +50,23 @@ Work in the user's project directory (server auto-creates `./.mm-viz` for pages)
 5. **Iterate**: edit `MM_PARAMS` + user refreshes, or push live updates (below).
 
 **Online vs offline mm**: templates default to the online build (`https://bhosmer.github.io/mm/index.html`). If the network can't reach GitHub Pages, add `?src=local` to the page URL (or click the toggle) to use the offline copy served at `/mm/index.html`. Offline mode requires `serve.py` running.
+
+## MCP server (optional)
+
+Two transports are available; both expose the same tools:
+
+- **stdio** - `scripts/mcp.py` speaks newline-delimited JSON-RPC over stdio (zero dependencies) and embeds the HTTP server automatically:
+  ```json
+  { "mcpServers": { "mm-skill": { "command": "python", "args": ["<skill>/scripts/mcp.py"] } } }
+  ```
+- **Streamable HTTP** - the HTTP server (`serve.py` or mcp.py's embedded server) exposes `POST /mcp` (JSON-RPC over HTTP; `GET /mcp` returns 405, no SSE push):
+  ```json
+  { "mcpServers": { "mm-skill": { "url": "http://127.0.0.1:8019/mcp" } } }
+  ```
+
+Tools: `create_viz` (name, params, template basic|interactive, offline) returns the preview URL; `update_viz`, `get_viz`, `list_vizzes`, `delete_viz`, `open_viz`, `get_server_info`.
+- `params` uses the same mm params schema as `MM_PARAMS` (see "Params cheatsheet").
+- Defaults: viz dir `./.mm-viz` (`--viz-dir`), HTTP port 8019 (`--port`, auto-increments if busy), offline `?src=local` URLs.
 
 ## Driving mm live (postMessage)
 

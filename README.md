@@ -26,6 +26,7 @@ mm-3d-viz-skill/
         │   ├── upstream-ref.md
         │   └── upstream-ref.zh.md
         ├── scripts/
+        │   ├── mcp.py
         │   └── serve.py
         ├── templates/
         │   ├── viz-basic.html
@@ -47,6 +48,8 @@ mm-3d-viz-skill/
 3. 给你预览地址 `http://127.0.0.1:8019/viz/<名称>.html`，以及汇总页 `http://127.0.0.1:8019/`。
 
 生成的页面与索引页均为中英双语，右上角按钮切换（默认跟随浏览器语言并记忆选择）。
+
+若所用智能体支持 MCP，可通过两种方式接入并直接调用 `create_viz` 等工具：stdio（`scripts/mcp.py`）或 Streamable HTTP（服务器 `POST /mcp` 端点，如 `http://127.0.0.1:8019/mcp`），无需手动启动服务器（用法见 `SKILL.md`）。
 
 手动体验（可选；正常使用 skill 时服务器由 AI 自动启动）：
 

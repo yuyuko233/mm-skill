@@ -6,6 +6,7 @@ Serves two roots on one port so visualization pages can be previewed locally:
   /mm/*   -> <skill>/runtime/mm/       (offline copy of the mm visualizer)
   /viz/*  -> <viz-dir>/*               (visualization pages, default: ./.mm-viz)
   /       -> generated index listing all viz pages
+  /mcp    -> Streamable HTTP MCP endpoint (POST JSON-RPC, tools from mcp.py)
 
 Usage:
   python serve.py                          # serve from cwd, default port 8019
@@ -19,6 +20,7 @@ Run it in the background while previewing, e.g.:
 
 import argparse
 import html
+import json
 import socket
 import sys
 import urllib.parse
@@ -29,9 +31,15 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 MM_ROOT = SKILL_DIR / "runtime" / "mm"
 
+# MCP 消息处理与工具实现复用同目录的 mcp.py（stdio 与 HTTP 两种传输共享同一套工具）
+# MCP message handling and tools are shared with mcp.py (stdio transport)
+sys.path.insert(0, str(SCRIPT_DIR))
+from mcp import ToolBox, process_message  # noqa: E402
+
 DEFAULT_PORT = 8019
 PREFIX_MM = "/mm/"
 PREFIX_VIZ = "/viz/"
+PREFIX_MCP = "/mcp"
 
 
 def make_handler(viz_dir: Path):
@@ -62,6 +70,13 @@ def make_handler(viz_dir: Path):
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
+            if clean == PREFIX_MCP:
+                # Streamable HTTP：GET 用于可选的服务器→客户端 SSE 推送，本实现不提供
+                self.send_response(405)
+                self.send_header("Allow", "POST")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             if clean in ("/", "/index.html"):
                 return self._send_listing()
             if clean == "/viz" or clean == PREFIX_VIZ.rstrip("/"):
@@ -71,6 +86,50 @@ def make_handler(viz_dir: Path):
                 self.end_headers()
                 return
             return super().do_GET()
+
+        def do_POST(self):
+            clean = urllib.parse.unquote(self.path.split("?")[0].split("#")[0])
+            if clean == PREFIX_MCP:
+                return self._handle_mcp()
+            self.send_error(501, "Unsupported method")
+
+        # --- MCP (Streamable HTTP) ---------------------------------------
+        # POST 单条 JSON-RPC 消息：有响应时返回 application/json；
+        # 通知类消息返回 202（规范允许服务器不提供 SSE 流式响应）。
+        # POST one JSON-RPC message: reply with application/json when a
+        # response is required, 202 for notifications (no SSE streaming).
+        def _handle_mcp(self):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0:
+                return self._send_json(400, {"jsonrpc": "2.0", "id": None,
+                                             "error": {"code": -32700, "message": "empty request body"}})
+            raw = self.rfile.read(length)
+            try:
+                msg = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                return self._send_json(400, {"jsonrpc": "2.0", "id": None,
+                                             "error": {"code": -32700, "message": f"parse error: {e}"}})
+            box = ToolBox(viz_dir, self.server.server_port)
+            resp = process_message(box, msg)
+            if resp is None:
+                self.send_response(202)  # accepted (notification: no response body)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self._send_json(200, resp)
+
+        def _send_json(self, code: int, obj):
+            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
 
         # --- helpers -----------------------------------------------------
         def _send_text(self, code: int, text: str, ctype="text/plain; charset=utf-8"):

@@ -16,6 +16,7 @@ mm 是一个静态 Three.js Web 应用：完全由 **params JSON** 驱动，通�
 | `templates/viz-basic.html` | 复制它创建简单的嵌入页面（中英双语界面，按钮切换） |
 | `templates/viz-interactive.html` | 复制它创建带实时控制面板的页面（中英双语界面） |
 | `scripts/serve.py` | 本地服务器：`/mm/*` = 离线 mm 运行时，`/viz/*` = 可视化页面 |
+| `scripts/mcp.py` | MCP 服务器（stdio JSON-RPC）：内嵌同一 HTTP 服务，并提供 create/update/list/delete/open 等可视化工具 |
 | `runtime/mm/` | mm 离线副本，含官方手册 `ref.html`（应用内 "Reference" 链接可用；MIT 许可） |
 | `reference/params-reference.md` | 完整参数手册（英文）——手写复杂参数前先读 |
 | `reference/params-reference.zh.md` | 参数手册（中文） |
@@ -47,6 +48,23 @@ mm 是一个静态 Three.js Web 应用：完全由 **params JSON** 驱动，通�
 5. **迭代**：编辑 `MM_PARAMS` 让用户刷新，或推送实时更新（见下）。
 
 **线上 vs 离线 mm**：模板默认使用线上构建（`https://bhosmer.github.io/mm/index.html`）。如果网络无法访问 GitHub Pages，在页面 URL 上加 `?src=local`（或点击切换按钮）使用 `/mm/index.html` 提供的离线副本。离线模式需要 `serve.py` 运行。
+
+## MCP 服务器（可选）
+
+提供两种传输方式，暴露同一套工具：
+
+- **stdio** —— `scripts/mcp.py` 通过 stdio 提供按行分隔的 JSON-RPC（零依赖），并自动内嵌 HTTP 服务器：
+  ```json
+  { "mcpServers": { "mm-skill": { "command": "python", "args": ["<skill>/scripts/mcp.py"] } } }
+  ```
+- **Streamable HTTP** —— HTTP 服务器（`serve.py` 或 mcp.py 内嵌的服务）暴露 `POST /mcp` 端点（JSON-RPC over HTTP；`GET /mcp` 返回 405，不提供 SSE 推送）：
+  ```json
+  { "mcpServers": { "mm-skill": { "url": "http://127.0.0.1:8019/mcp" } } }
+  ```
+
+工具：`create_viz`（name、params、template basic|interactive、offline）返回预览 URL；`update_viz`、`get_viz`、`list_vizzes`、`delete_viz`、`open_viz`、`get_server_info`。
+- `params` 与 `MM_PARAMS` 使用同一套 mm 参数 schema（见下方"参数速查"）。
+- 默认值：可视化目录 `./.mm-viz`（`--viz-dir`）、HTTP 端口 8019（`--port`，被占用时自动递增）、离线 `?src=local` URL。
 
 ## 实时驱动 mm（postMessage）
 

@@ -26,6 +26,7 @@ mm-3d-viz-skill/
         │   ├── upstream-ref.md
         │   └── upstream-ref.zh.md
         ├── scripts/
+        │   ├── mcp.py
         │   └── serve.py
         ├── templates/
         │   ├── viz-basic.html
@@ -47,6 +48,8 @@ Just ask the assistant for something like "build a **causal attention** 3D visua
 3. hand you the preview URL `http://127.0.0.1:8019/viz/<name>.html` (index at `http://127.0.0.1:8019/`).
 
 The generated pages and the index are bilingual (zh/en) - switch via the button at the top right (follows the browser language by default and remembers your choice).
+
+If your agent host supports MCP, connect via either transport and call tools such as `create_viz` directly: stdio (`scripts/mcp.py`) or Streamable HTTP (the server's `POST /mcp` endpoint, e.g. `http://127.0.0.1:8019/mcp`) - the HTTP server is embedded, no manual start needed (see `SKILL.md`).
 
 Manual try (optional; the server is started automatically by the AI during normal skill use):
 
