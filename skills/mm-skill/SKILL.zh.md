@@ -59,7 +59,7 @@ mm 是一个静态 Three.js Web 应用：完全由 **params JSON** 驱动，通�
   ```
 - **Streamable HTTP** —— HTTP 服务器（`serve.py` 或 mcp.py 内嵌的服务）暴露 `POST /mcp` 端点（JSON-RPC over HTTP；`GET /mcp` 返回 405，不提供 SSE 推送）：
   ```json
-  { "mcpServers": { "mm-skill": { "url": "http://127.0.0.1:8019/mcp" } } }
+  { "mcpServers": { "mm-skill": { "type": "streamable-http", "url": "http://127.0.0.1:8019/mcp" } } }
   ```
 
 工具：`create_viz`（name、params、template basic|interactive、offline）返回预览 URL；`update_viz`、`get_viz`、`list_vizzes`、`delete_viz`、`open_viz`、`get_server_info`。

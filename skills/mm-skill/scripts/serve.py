@@ -8,6 +8,9 @@ Serves two roots on one port so visualization pages can be previewed locally:
   /       -> generated index listing all viz pages
   /mcp    -> Streamable HTTP MCP endpoint (POST JSON-RPC, tools from mcp.py)
 
+MCP client config (Streamable HTTP):
+  { "mcpServers": { "mm-skill": { "type": "streamable-http", "url": "http://127.0.0.1:8019/mcp" } } }
+
 Usage:
   python serve.py                          # serve from cwd, default port 8019
   python serve.py --viz-dir D:\\work\\vizzes

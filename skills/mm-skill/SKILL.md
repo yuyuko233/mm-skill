@@ -61,7 +61,7 @@ Two transports are available; both expose the same tools:
   ```
 - **Streamable HTTP** - the HTTP server (`serve.py` or mcp.py's embedded server) exposes `POST /mcp` (JSON-RPC over HTTP; `GET /mcp` returns 405, no SSE push):
   ```json
-  { "mcpServers": { "mm-skill": { "url": "http://127.0.0.1:8019/mcp" } } }
+  { "mcpServers": { "mm-skill": { "type": "streamable-http", "url": "http://127.0.0.1:8019/mcp" } } }
   ```
 
 Tools: `create_viz` (name, params, template basic|interactive, offline) returns the preview URL; `update_viz`, `get_viz`, `list_vizzes`, `delete_viz`, `open_viz`, `get_server_info`.
